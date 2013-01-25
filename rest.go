@@ -9,6 +9,7 @@ import (
 	_ "github.com/Go-SQL-Driver/MySQL"
 	"io/ioutil"
 	"net/http"
+  "service"
 )
 
 type Cfg struct {
@@ -31,33 +32,6 @@ func (l *Cfg) ConfigFrom(path string) {
 	return
 }
 
-type ProductList struct {
-	XMLName  xml.Name `xml:"Products"`
-	Products []ListProduct
-}
-
-type ListProduct struct {
-	XMLName     xml.Name `xml:"product"`
-	Id          int      `xml:"id"`
-	Sku         string   `xml:"sku"`
-	Name        string   `xml:"title"`
-}
-
-type Product struct {
-	XMLName     xml.Name `xml:"product"`
-	Id          int      `xml:"id"`
-	Sku         string   `xml:"sku"`
-	Name        string   `xml:"title"`
-	ShortDesc   string   `xml:"short_description"`
-	Description string   `xml:"description"`
-	Color       string   `xml:"color"`
-	Size        string   `xml:"size"`
-	Uvp         string   `xml:"uvp"`
-	Status      int      `xml:"status"`
-	StdPrice    string   `xml:"std_price"`
-	Ean         string   `xml:"ean"`
-	ProductType int      `xml:"product_type"`
-}
 
 type Bestand struct {
 	XMLName  xml.Name `xml:"product"`
@@ -82,7 +56,7 @@ type Price struct {
 
 func main() {
 	Config.ConfigFrom("config.json")
-	gorest.RegisterService(new(ProductService))
+	gorest.RegisterService(new(service.ProductService))
 	gorest.RegisterService(new(BestandService))
 	gorest.RegisterService(new(PriceService))
 	http.Handle("/", gorest.Handle())
@@ -107,104 +81,9 @@ type PriceService struct {
 	listPrice          gorest.EndPoint `method:"GET" path:"/list/token/{token:string}" output:"string"`
 }
 
-type ProductService struct {
-	gorest.RestService `root:"/product/"`
-	productDetailsFull gorest.EndPoint `method:"GET" path:"/detail/id/{id:string}/token/{token:string}" output:"string"`
-	listProduct        gorest.EndPoint `method:"GET" path:"/list/token/{token:string}" output:"string"`
 }
 
-func (serv PriceService) ListPrice(token string) string {
-	var query string
-	user := GetUser(token)
-	if user.Id > 0 && user.PriceList > 0 {
-		query = fmt.Sprintf("SELECT product_id, price FROM price where price_list = '%d'", user.PriceList)
 
-		db, e := sql.Open("mysql", Config.User+":"+Config.Pwd+"@unix(/var/run/mysqld/mysqld.sock)/"+Config.Database+"?charset=utf8")
-		if e != nil {
-			panic(e)
-		}
-		rows, err := db.Query(query)
-		if err != nil {
-			panic(e)
-		}
-		var pl PriceList
-		pl.Id = user.PriceList
-		for rows.Next() {
-			var p Price
-			rows.Scan(&p.Id, &p.Price)
-			pl.List = append(pl.List, p)
-		}
-		t, e := xml.MarshalIndent(pl, "  ", "    ")
-		if e != nil {
-			panic(e)
-		}
-		return xml.Header + string(t)
-	} else {
-		return "Invalid path for request"
-	}
-	return ("No valid price list for your user-token")
-
-}
-
-func (serv BestandService) ListBestandFull(token string) string {
-	user := GetUser(token)
-	if user.Id == 0 {
-		return "Invalid path for request"
-	}
-	db, e := sql.Open("mysql", Config.User+":"+Config.Pwd+"@unix(/var/run/mysqld/mysqld.sock)/"+Config.Database+"?charset=utf8")
-	if e != nil {
-		panic(e)
-	}
-	var BestandsSql string
-	if user.FullStock {
-		BestandsSql = "SELECT product_id, quantity FROM bestand"
-	} else {
-		BestandsSql = "SELECT product_id, if(quantity>0, 1, 0) FROM bestand"
-	}
-	rows, err := db.Query(BestandsSql)
-	if err != nil {
-		panic(e)
-	}
-	var bl BestandsListe
-
-	for rows.Next() {
-		var qty Bestand
-		rows.Scan(&qty.Id, &qty.Quantity)
-		bl.ListBestand = append(bl.ListBestand, qty)
-	}
-	t, e := xml.MarshalIndent(bl, "  ", "    ")
-	if e != nil {
-		panic(e)
-	}
-	return xml.Header + string(t)
-}
-
-func (serv ProductService) ListProduct(token string) string {
-	user := GetUser(token)
-	if user.Id == 0 {
-		return "Invalid path for request"
-	}
-	db, e := sql.Open("mysql", Config.User+":"+Config.Pwd+"@unix(/var/run/mysqld/mysqld.sock)/"+Config.Database+"?charset=utf8")
-	if e != nil {
-		panic(e)
-	}
-	rows, err := db.Query("SELECT id, sku, name FROM products")
-	if err != nil {
-		panic(e)
-	}
-	var pl ProductList
-
-	for rows.Next() {
-		var p ListProduct
-		rows.Scan(&p.Id, &p.Sku, &p.Name)
-		pl.Products = append(pl.Products, p)
-	}
-	t, e := xml.MarshalIndent(pl, "  ", "    ")
-	if e != nil {
-		panic(e)
-	}
-	return xml.Header + string(t)
-}
 
 func CData(s string) string {
 	if s != "" {
@@ -227,34 +106,3 @@ func GetUser(s string) User {
 
 }
 
-func (serv ProductService) ProductDetailsFull(id string, token string) string {
-
-	var query string
-	user := GetUser(token)
-	if user.Id > 0 && user.FullDescription {
-		query = "SELECT id, sku, name, ean, color, size, product_type, status, uvp, standardprice, shortdescription, longdescription FROM products where id = '" + id + "'"
-	} else if user.Id > 0 && !user.FullDescription {
-		query = "SELECT id, sku, name, ean, color, size, product_type, status, uvp, standardprice, shortdescription = NULL, longdescription = NULL FROM products where id = '" + id + "'"
-	} else {
-		return "Invalid path for request"
-	}
-
-	db, e := sql.Open("mysql", Config.User+":"+Config.Pwd+"@unix(/var/run/mysqld/mysqld.sock)/"+Config.Database+"?charset=utf8")
-
-	if e != nil {
-		panic(e)
-	}
-
-	rows := db.QueryRow(query)
-
-		var p Product
-		rows.Scan(&p.Id, &p.Sku, &p.Name, &p.Ean, &p.Color, &p.Size, &p.ProductType, &p.Status, &p.Uvp, &p.StdPrice, &p.ShortDesc, &p.Description)
-		p.Name = CData(p.Name)
-		p.Description = CData(p.Description)
-		p.ShortDesc = CData(p.ShortDesc)
-	t, e := xml.MarshalIndent(p, "  ", "    ")
-	if e != nil {
-		panic(e)
-	}
-	return xml.Header + string(t)
-}
