@@ -33,7 +33,14 @@ func (l *Cfg) ConfigFrom(path string) {
 
 type ProductList struct {
 	XMLName  xml.Name `xml:"Products"`
-	Products []Product
+	Products []ListProduct
+}
+
+type ListProduct struct {
+	XMLName     xml.Name `xml:"product"`
+	Id          int      `xml:"id"`
+	Sku         string   `xml:"sku"`
+	Name        string   `xml:"title"`
 }
 
 type Product struct {
@@ -64,7 +71,7 @@ type BestandsListe struct {
 
 type PriceList struct {
 	XMLName xml.Name `xml:"Prices"`
-	Id      int      `xml:"id,attr"`
+  Id      int      `xml:"-"`
 	List    []Price
 }
 type Price struct {
@@ -188,7 +195,7 @@ func (serv ProductService) ListProduct(token string) string {
 	var pl ProductList
 
 	for rows.Next() {
-		var p Product
+		var p ListProduct
 		rows.Scan(&p.Id, &p.Sku, &p.Name)
 		pl.Products = append(pl.Products, p)
 	}
@@ -238,21 +245,14 @@ func (serv ProductService) ProductDetailsFull(id string, token string) string {
 		panic(e)
 	}
 
-	rows, err := db.Query(query)
-	if err != nil {
-		panic(e)
-	}
-	var pl ProductList
+	rows := db.QueryRow(query)
 
-	for rows.Next() {
 		var p Product
 		rows.Scan(&p.Id, &p.Sku, &p.Name, &p.Ean, &p.Color, &p.Size, &p.ProductType, &p.Status, &p.Uvp, &p.StdPrice, &p.ShortDesc, &p.Description)
 		p.Name = CData(p.Name)
 		p.Description = CData(p.Description)
 		p.ShortDesc = CData(p.ShortDesc)
-		pl.Products = append(pl.Products, p)
-	}
-	t, e := xml.MarshalIndent(pl, "  ", "    ")
+	t, e := xml.MarshalIndent(p, "  ", "    ")
 	if e != nil {
 		panic(e)
 	}
