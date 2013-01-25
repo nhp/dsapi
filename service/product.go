@@ -1,8 +1,10 @@
 package service
 
 import (
+	"code.google.com/p/gorest"
+	"database/sql"
   "encoding/xml"
-  	_ "github.com/Go-SQL-Driver/MySQL"
+	_ "github.com/Go-SQL-Driver/MySQL"
 )
 
 type ProductList struct {
@@ -32,12 +34,12 @@ type Product struct {
 	Ean         string   `xml:"ean"`
 	ProductType int      `xml:"product_type"`
 }
+
 type ProductService struct {
 	gorest.RestService `root:"/product/"`
 	productDetailsFull gorest.EndPoint `method:"GET" path:"/detail/id/{id:string}/token/{token:string}" output:"string"`
 	listProduct        gorest.EndPoint `method:"GET" path:"/list/token/{token:string}" output:"string"`
 }
-
 func (serv ProductService) ListProduct(token string) string {
 	user := GetUser(token)
 	if user.Id == 0 {

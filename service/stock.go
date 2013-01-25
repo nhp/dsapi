@@ -1,8 +1,23 @@
 package service
 import (
+	"code.google.com/p/gorest"
+	"database/sql"
   "encoding/xml"
-  	_ "github.com/Go-SQL-Driver/MySQL"
-    (
+	_ "github.com/Go-SQL-Driver/MySQL"
+)
+type Bestand struct {
+	XMLName  xml.Name `xml:"product"`
+	Id       int      `xml:"id"`
+	Quantity string   `xml:"qty"`
+}
+type BestandsListe struct {
+	XMLName     xml.Name `xml:"Bestand"`
+	ListBestand []Bestand
+}
+type BestandService struct {
+	gorest.RestService `root:"/bestand/"`
+	listBestandFull    gorest.EndPoint `method:"GET" path:"/list/token/{token:string}" output:"string"`
+}
 func (serv BestandService) ListBestandFull(token string) string {
 	user := GetUser(token)
 	if user.Id == 0 {
