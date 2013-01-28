@@ -22,6 +22,7 @@ type Cfg struct {
 	User     string
 	Pwd      string
 	Database string `json:"db"`
+  Path     string `json:"xmlpath"`
 }
 
 var Config Cfg
