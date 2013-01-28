@@ -3,7 +3,7 @@ package main
 import (
 	"code.google.com/p/gorest"
 	"net/http"
-  "github.com/nhp/dsapi/service"
+  "bitbucket.org/nhp/dsapi/service"
 )
 
 func main() {
