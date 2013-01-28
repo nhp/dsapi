@@ -6,7 +6,37 @@ import (
   "strings"
   "os"
   "encoding/xml"
+  "io/ioutil"
+  "encoding/json"
 )
+
+
+type Cfg struct {
+	User     string
+	Pwd      string
+	Database string `json:"db"`
+  Path     string `json:"xmlpath"`
+}
+
+var Config Cfg
+
+func CData(s string) string {
+	if s != "" {
+		return fmt.Sprintf("<![CDATA[%s]]>", s)
+	}
+	return s
+}
+func (l *Cfg) ConfigFrom(path string) {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(b, &l)
+	if err != nil {
+		fmt.Print("bad json ", err)
+	}
+	return
+}
 
 type Product struct {
   ID int
@@ -48,8 +78,9 @@ func (p Product) String() string {
 
 
 func main() {
+  Config.ConfigFrom("config.json")
   found := 0
-  xmlFile, err := os.Open("t.xml")
+  xmlFile, err := os.Open(Config.Path + "Artikeldaten.xml")
   var productList []Product
   var priceList []Price
   var bestandList []Bestand
@@ -84,7 +115,7 @@ func main() {
           }
     }
   }
-  xmlFile2, err := os.Open("EKPreise.xml")
+  xmlFile2, err := os.Open(Config.Path + "EKPreise.xml")
   if err != nil {
     fmt.Println("Error opening file:", err)
   } else {
@@ -98,15 +129,10 @@ func main() {
       }
       switch se := t.(type) {
         case xml.StartElement:
-          // If we just read a StartElement token
           inElement := se.Name.Local
           if inElement == "Preis" {
             var pr Price
-            // decode a whole chunk of following XML into the
-            // variable p which is a Page (se above)
             decoder.DecodeElement(&pr, &se)
-
-            // Do some stuff with the page.
             priceList = append(priceList, pr)
             total++
           }
@@ -114,7 +140,7 @@ func main() {
       }
     }
   }
-  xmlFile, err = os.Open("Bestand.xml")
+  xmlFile, err = os.Open(Config.Path + "Bestand.xml")
   if err != nil {
     fmt.Println("Error opening file:", err)
   } else {
@@ -128,31 +154,25 @@ func main() {
       }
       switch se := t.(type) {
         case xml.StartElement:
-          // If we just read a StartElement token
           inElement := se.Name.Local
           if inElement == "Bestand" {
             var b Bestand
-            // decode a whole chunk of following XML into the
-            // variable p which is a Page (se above)
             decoder.DecodeElement(&b, &se)
-
-            // Do some stuff with the page.
             bestandList = append(bestandList, b)
-            // fmt.Printf("\t%s\n", p)
             total++
           }
         default:
       }
     }
   }
-  
+
   if found == 0 {
     fmt.Printf("No xml file found, aborting")
     return
   }
 
-  db,e := sql.Open("mysql", "test:test23@unix(/var/run/mysqld/mysqld.sock)/dsapi?charset=utf8")
-  
+  db,e := sql.Open("mysql", Config.User + ":" + Config.Pwd + "@unix(/var/run/mysqld/mysqld.sock)/" + Config.Database + "?charset=utf8")
+
   if e != nil {
     panic(e)
   }
